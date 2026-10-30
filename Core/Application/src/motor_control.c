@@ -31,8 +31,6 @@ void StartMotorCtlTask(void *argument)
     M3508_Init();
     Chassis_Init();
 
-    Chassis_WheelType_t m3508_pos_act;
-
     static float vx,vy,w;
     static float vx3,vy3,w3;
     static uint8_t stop_flag = 0;

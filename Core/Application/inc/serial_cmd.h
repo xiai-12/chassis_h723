@@ -1,5 +1,5 @@
-#ifndef ROBOCON_TEST_MOTOR_CONTROL_H
-#define ROBOCON_TEST_MOTOR_CONTROL_H
+#ifndef ROBOCON_TEST_SERIAL_CMD_H
+#define ROBOCON_TEST_SERIAL_CMD_H
 
 #include "main.h"
 #include "string.h"
@@ -84,4 +84,4 @@ extern Encoder_imu_CMD Encoder_imu_cmd_structor;
 void Parse_serial_line(char *cmd);
 void Parse_vision_line(const uint8_t* cmd, uint16_t len);
 
-#endif //ROBOCON_TEST_MOTOR_CONTROL_H
+#endif //ROBOCON_TEST_SERIAL_CMD_H
