@@ -53,6 +53,23 @@ PID_Improve  chassis_pos_im={
 };
 PID_Improve pid_im_none;
 
+Trace Pos_x_trace ={
+    .acc = 0.5f, .vmax = 0.8f
+};
+Trace Pos_y_trace ={
+    .acc = 0.5f, .vmax = 0.8f
+};
+Trace Yaw_trace ={
+    .acc = 1.0f, .vmax = 1.0f
+};
+
+Trace Total_trace ={
+    .acc = 0.5f, .vmax = 1.0f
+};
+
+#define POS_TOL_ENTER   0.010f    /* 进：10 mm（超冲治好后收到 0.006f） */
+#define ANGLE_TOL       0.01745f  /* 1° */
+
 /**
  * 初始化底盘参数
  */
@@ -85,8 +102,8 @@ void Chassis_Init(void) {
     Chassis.targetVel.v_y = 0.0f;
     Chassis.targetVel.w = 0.0f;
 
-    PID_Init(&chassis_pos_vx,1.2f,0.0f,0.0f,1.0f,-1.0f,&chassis_pos_im);
-    PID_Init(&chassis_pos_vy,1.2f,0.0f,0.0f,1.0f,-1.0f,&chassis_pos_im);
+    // PID_Init(&chassis_pos_vx,1.2f,0.0f,0.0f,1.0f,-1.0f,&chassis_pos_im);
+    // PID_Init(&chassis_pos_vy,1.2f,0.0f,0.0f,1.0f,-1.0f,&chassis_pos_im);
     PID_Init(&chassis_pos_yaw,0.6f,0.0f,0.0f,3.0f,-3.0f,&pid_im_none);
 }
 
@@ -111,25 +128,76 @@ void Chassis_Control(Chassis_Frame_t frame, Chassis_Mode_t mode, float x, float 
 
         /* 位置模式 */
         case Chassis_Position: {
-            chassis_pos_vx.Tar = x;
-            chassis_pos_vx.Act = Chassis.GlobalPos.x;
-            chassis_pos_vy.Tar = y;
-            chassis_pos_vy.Act = Chassis.GlobalPos.y;
-            PID_Controllor(&chassis_pos_vx);
-            PID_Controllor(&chassis_pos_vy);
-            Chassis.targetVel.v_x =  chassis_pos_vx.Out;
-            Chassis.targetVel.v_y =  chassis_pos_vy.Out;
+            // chassis_pos_vx.Tar = x;
+            // chassis_pos_vx.Act = Chassis.GlobalPos.x;
+            // chassis_pos_vy.Tar = y;
+            // chassis_pos_vy.Act = Chassis.GlobalPos.y;
+            // PID_Controllor(&chassis_pos_vx);
+            // PID_Controllor(&chassis_pos_vy);
+            // Chassis.targetVel.v_x =  chassis_pos_vx.Out;
+            // Chassis.targetVel.v_y =  chassis_pos_vy.Out;
 
-            // float err_x = x - Chassis.GlobalPos.x;
-            // float err_y = y - Chassis.GlobalPos.y;
-            // #define POS_P_FACT    0.2f   // 位置环比例
-            // #define MAX_VEL_LIMIT 1.0f  // 限幅
-            // Chassis.targetVel.v_x = err_x * POS_P_FACT;
-            // Chassis.targetVel.v_y = err_y * POS_P_FACT;
-            // if (Chassis.targetVel.v_x > MAX_VEL_LIMIT)  Chassis.targetVel.v_x = MAX_VEL_LIMIT;
-            // if (Chassis.targetVel.v_x < -MAX_VEL_LIMIT) Chassis.targetVel.v_x = -MAX_VEL_LIMIT;
-            // if (Chassis.targetVel.v_y > MAX_VEL_LIMIT)  Chassis.targetVel.v_y = MAX_VEL_LIMIT;
-            // if (Chassis.targetVel.v_y < -MAX_VEL_LIMIT) Chassis.targetVel.v_y = -MAX_VEL_LIMIT;
+            // Pos_x_trace.pos_target = x;
+            // Pos_y_trace.pos_target = y;
+            // Pos_x_trace.pos_act = Chassis.GlobalPos.x;
+            // Pos_y_trace.pos_act = Chassis.GlobalPos.y;
+            // Trace_Update(&Pos_x_trace,0.005f);
+            // Trace_Update(&Pos_y_trace,0.005f);
+            // Chassis.targetVel.v_x = Pos_x_trace.vref;
+            // Chassis.targetVel.v_y = Pos_y_trace.vref;
+
+            static uint8_t pos_arrived    = 0;
+            static uint8_t pos_arrive_cnt = 0;
+            static float   pos_last_x     = 0.0f;
+            static float   pos_last_y     = 0.0f;
+
+            float ex = x - Chassis.GlobalPos.x;
+            float ey = y - Chassis.GlobalPos.y;
+            float d  = sqrtf(ex*ex + ey*ey);
+            float da = Chassis.targetPos.yaw - para;
+            if (da >  (float)M_PI) da -= 2.0f * (float)M_PI;
+            else if (da < -(float)M_PI) da += 2.0f * (float)M_PI;
+
+            //换目标解锁
+            if (fabsf(x - pos_last_x) > 1e-4f || fabsf(y - pos_last_y) > 1e-4f)
+            {
+                pos_arrived = 0;
+                pos_arrive_cnt = 0;
+            }
+            pos_last_x = x;
+            pos_last_y = y;
+            //到位锁存
+            if (!pos_arrived && d < POS_TOL_ENTER && fabsf(da) < ANGLE_TOL)
+            {
+                if (++pos_arrive_cnt >= 5)
+                    pos_arrived = 1;
+            }
+            else if (!pos_arrived)
+            {
+                pos_arrive_cnt = 0;
+            }
+                
+            if (pos_arrived)
+            {
+                Total_trace.vref = 0.0f;
+                Chassis.targetVel.v_x = 0.0f;
+                Chassis.targetVel.v_y = 0.0f;
+                break;
+            }
+
+            Total_trace.pos_target = d;
+            Total_trace.pos_act    = 0.0f;
+            Trace_Update(&Total_trace, 0.005f);
+            if (d > 1e-4f)
+            {
+                Chassis.targetVel.v_x = Total_trace.vref * (ex / d);
+                Chassis.targetVel.v_y = Total_trace.vref * (ey / d);
+            }
+            else
+            {
+                Chassis.targetVel.v_x = 0.0f;
+                Chassis.targetVel.v_y = 0.0f;
+            }
         }
         break;
 
@@ -149,19 +217,19 @@ void Chassis_Control(Chassis_Frame_t frame, Chassis_Mode_t mode, float x, float 
         Chassis.targetVel.w = z;
         Chassis.targetPos.yaw = para;
     } else {
-        float yaw_err = Chassis.targetPos.yaw - para;
-        if (yaw_err >  M_PI)  yaw_err -= 2.0f * (float)M_PI;
-        else if (yaw_err < -M_PI) yaw_err += 2.0f * (float)M_PI;
-
-        // float CHASSIS_W_P = 0.6f;
-        // Chassis.targetVel.w = yaw_err * CHASSIS_W_P;
-        // if (Chassis.targetVel.w > 3.0f)   Chassis.targetVel.w = 3.0f;
-        // if (Chassis.targetVel.w < -3.0f)  Chassis.targetVel.w = -3.0f;
+        // float yaw_err = Chassis.targetPos.yaw - para;
+        // if (yaw_err >  M_PI)  yaw_err -= 2.0f * (float)M_PI;
+        // else if (yaw_err < -M_PI) yaw_err += 2.0f * (float)M_PI;
 
         chassis_pos_yaw.Tar = Chassis.targetPos.yaw;
         chassis_pos_yaw.Act = para;
         PID_Controllor(&chassis_pos_yaw);
         Chassis.targetVel.w = chassis_pos_yaw.Out;
+
+        // Yaw_trace.pos_target = Chassis.targetPos.yaw;
+        // Yaw_trace.pos_act = para;
+        // Trace_Update(&Yaw_trace,0.005f);
+        // Chassis.targetVel.w = Yaw_trace.vref;
 
 
     }

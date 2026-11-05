@@ -27,11 +27,11 @@ FDCAN_TxHeaderTypeDef m3508_tx_header;
  */
 
 PID_Improve speed_im = {
-    .integral_limit = 1,.integral_limit_val = 50000,
+    .integral_limit = 1,.integral_limit_val = 2000,
     .variable_integal = 0,.variable_integal_k = 0.003f,
     .deriv_on_meas = 1,
     .deriv_filter = 1, .deriv_filter_alpha = 0.8f,
-    .out_dead_zone = 1, .out_dead_zone_val = 30.0f
+    .out_dead_zone = 0, .out_dead_zone_val = 0.0f
 };
 
 /*
@@ -85,10 +85,10 @@ HAL_StatusTypeDef M3508_Init(void)
         return HAL_ERROR;
     }
 
-    PID_Init(&m3508_data[0].speed_pid,6.0f,0.25f,5.0f,15000,-15000,&speed_im);
-    PID_Init(&m3508_data[1].speed_pid,6.0f,0.20f,6.0f,15000,-15000,&speed_im);
-    PID_Init(&m3508_data[2].speed_pid,6.0f,0.30f,6.0f,15000,-15000,&speed_im);
-    PID_Init(&m3508_data[3].speed_pid,6.0f,0.20f,6.0f,15000,-15000,&speed_im);
+    PID_Init(&m3508_data[0].speed_pid,16.0f,0.25f,2.0f,15000,-15000,&speed_im);
+    PID_Init(&m3508_data[1].speed_pid,16.0f,0.20f,2.0f,15000,-15000,&speed_im);
+    PID_Init(&m3508_data[2].speed_pid,16.0f,0.30f,2.0f,15000,-15000,&speed_im);
+    PID_Init(&m3508_data[3].speed_pid,16.0f,0.20f,2.0f,15000,-15000,&speed_im);
     return HAL_OK;
 }
 
@@ -97,9 +97,9 @@ HAL_StatusTypeDef M3508_Init(void)
 int16_t M3508_speed_ctl(M3508_t* motor,float speed_tar)
 {
     motor->speed_pid.Tar= speed_tar * Reduce_ration;// 单位 rpm  19.2032-减速比
-    motor->speed_pid.Act = 0.90f * (float)motor->speed + 0.10f * motor->speed_pid.Act;
+    motor->speed_pid.Act = 0.95f * (float)motor->speed + 0.05f * motor->speed_pid.Act;
     PID_Controllor(&motor->speed_pid);
-    float amp =  (int16_t)(0.95f * motor->speed_pid.Out + 0.05f * motor->speed_pid.Out_last);
+    float amp =  (int16_t)(0.98f * motor->speed_pid.Out + 0.02f * motor->speed_pid.Out_last);
     motor->speed_pid.Out_last = amp;
     return (int16_t)amp;
 }
@@ -113,9 +113,7 @@ void M3508_Reset(M3508_t* motor)
     motor->angle = 0;
     motor->temp = 0;
     motor->turns = 0;
-    motor->speed_pid.Tar = 0.0f;
-    motor->speed_pid.Out = 0.0f;
-    motor->speed_pid.Act = 0.0f;
+    PID_Reset(&motor->speed_pid);
 }
 
 // m3508电机发送函数， amp[4] 为 要发送的电流值(-16384 - 16384)

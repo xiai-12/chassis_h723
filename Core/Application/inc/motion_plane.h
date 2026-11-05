@@ -21,6 +21,6 @@ typedef struct
 
 extern Trace TracePlane;
 
-void Tace_Update(Trace* t,float dt);
+void Trace_Update(Trace* t,float dt);
 
 #endif //INC_1_CAN_3508_MOTION_PLANE_H

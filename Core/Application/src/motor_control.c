@@ -19,6 +19,20 @@ static float wrap_pi(float a)
     return a;
 }
 
+static const float ff_A [4] = { 600.0f, 600.0f, 1300.0f, 1300.0f}; // 粘性摩擦
+static const float ff_F0[4] = { 450.0f, 450.0f,  450.0f,  450.0f}; // 库伦摩擦
+static int16_t M3508_FeedForward(float t_rpm, float F0, float A)
+{
+    float s = t_rpm / 6.0f;
+    if (s >  1.0f) s =  1.0f;
+    if (s < -1.0f) s = -1.0f;
+
+    float coulomb = F0 * s;                                   //库仑摩擦
+    float viscous = A * t_rpm / (fabsf(t_rpm) + 100.0f);      //粘性摩擦
+
+    return (int16_t)(coulomb + Serial_cmd_structor.kt * viscous);
+}
+
 void StartMotorCtlTask(void *argument)
 {
     /* USER CODE BEGIN StartMotorCtlTask */
@@ -44,7 +58,6 @@ void StartMotorCtlTask(void *argument)
         {
             stop_flag = !stop_flag;
             Motor_Reset();
-            TracePlane.vref = 0.0f;
             Serial_cmd_structor.location_tar = 0;
         }
         btn_last = nrf_chassis_cmd.button;
@@ -79,7 +92,7 @@ void StartMotorCtlTask(void *argument)
                     break;
                 case MODE_2:
                 {
-                    static uint8_t lidia_cal_count = 0;
+                    static uint8_t lidia_cal_count = 0,first_flag =0;
                     static Chassis_WheelType_t wheel_last,wheel_now,wheel_delta;
                     static float  px = 0.0f, py = 0.0f, pyaw = 0.0f,tgt_x, tgt_y,tgt_w,tgt_yaw;
 
@@ -89,30 +102,45 @@ void StartMotorCtlTask(void *argument)
                     wheel_now.RF = m3508_data[Motor3_3508].turns * 0.3272f;
                     wheel_now.RB = m3508_data[Motor4_3508].turns * 0.3272f;
 
-                    wheel_delta.LB = wheel_now.LB - wheel_last.LB;
-                    wheel_delta.LF = wheel_now.LF - wheel_last.LF;
-                    wheel_delta.RF = wheel_now.RF - wheel_last.RF;
-                    wheel_delta.RB = wheel_now.RB - wheel_last.RB;
-
-                    wheel_last = wheel_now;
-                    Chassis_Velocity_t chassis_pos_delta = Chassis_FK_Wheel2Body(&wheel_delta);// 正解算得到的值单位是 m
-
-                    pyaw = wrap_pi(pyaw + chassis_pos_delta.w);
-                    float c = cosf(pyaw), s = sinf(pyaw);
-                    px += chassis_pos_delta.v_x * c - chassis_pos_delta.v_y * s;
-                    py += chassis_pos_delta.v_x * s + chassis_pos_delta.v_y * c;
-
-                    if (++lidia_cal_count >= 6)
+                    if (!first_flag)
                     {
-                        lidia_cal_count = 0;
+                        first_flag  = 1;
+                        wheel_last = wheel_now;
+
+                        pyaw = wrap_pi(Vision_cmd_structor.yaw - LOCATER_LIDAR_YAW_OFFSET);
+
                         float off_x = LOCATER_LIDAR_OFFSET_X_CM * cosf(pyaw) - LOCATER_LIDAR_OFFSET_Y_CM * sinf(pyaw);
                         float off_y = LOCATER_LIDAR_OFFSET_X_CM * sinf(pyaw) + LOCATER_LIDAR_OFFSET_Y_CM * cosf(pyaw);
-                        px  += 0.3f * ((-Vision_cmd_structor.pos_y - off_x ) - px);
-                        py  += 0.3f * (( Vision_cmd_structor.pos_x - off_y ) - py);
-                        pyaw  = wrap_pi(pyaw + 0.3f * wrap_pi(Vision_cmd_structor.yaw - LOCATER_LIDAR_YAW_OFFSET - pyaw));
-                        //SERIAL_printf("tgt=(%.3f,%.3f) pose=(%.3f,%.3f,%.3f) vel=(%.3f,%.3f,%.3f)\r\n",tgt_x, tgt_y,px, py, pyaw,Chassis.targetVel.v_x,Chassis.targetVel.v_y,Chassis.targetVel.w);
-                        //SERIAL_printf("%d,%d,%d,%d\r\n",amp[0],amp[1],amp[2],amp[3]);
-                    }//
+                        px = -Vision_cmd_structor.pos_y - off_x;
+                        py =  Vision_cmd_structor.pos_x - off_y;
+                    }
+                    else
+                    {
+                        wheel_delta.LB = wheel_now.LB - wheel_last.LB;
+                        wheel_delta.LF = wheel_now.LF - wheel_last.LF;
+                        wheel_delta.RF = wheel_now.RF - wheel_last.RF;
+                        wheel_delta.RB = wheel_now.RB - wheel_last.RB;
+
+                        wheel_last = wheel_now;
+                        Chassis_Velocity_t chassis_pos_delta = Chassis_FK_Wheel2Body(&wheel_delta);// 正解算得到的值单位是 m
+
+                        pyaw = wrap_pi(pyaw + chassis_pos_delta.w);
+                        float c = cosf(pyaw), s = sinf(pyaw);
+                        px += chassis_pos_delta.v_x * c - chassis_pos_delta.v_y * s;
+                        py += chassis_pos_delta.v_x * s + chassis_pos_delta.v_y * c;
+
+                        if (++lidia_cal_count >= 6)
+                        {
+                            lidia_cal_count = 0;
+                            float off_x = LOCATER_LIDAR_OFFSET_X_CM * cosf(pyaw) - LOCATER_LIDAR_OFFSET_Y_CM * sinf(pyaw);
+                            float off_y = LOCATER_LIDAR_OFFSET_X_CM * sinf(pyaw) + LOCATER_LIDAR_OFFSET_Y_CM * cosf(pyaw);
+                            px  += 0.8f * ((-Vision_cmd_structor.pos_y - off_x ) - px);
+                            py  += 0.8f * (( Vision_cmd_structor.pos_x - off_y ) - py);
+                            pyaw  = wrap_pi(pyaw + 0.3f * wrap_pi(Vision_cmd_structor.yaw - LOCATER_LIDAR_YAW_OFFSET - pyaw));
+                            //SERIAL_printf("%.3f,%.3f,%.3f,%.3f,%.3f\r\n",tgt_x, tgt_y,Chassis.targetVel.v_x,Chassis.targetVel.v_y,Chassis.targetVel.w);
+                            //SERIAL_printf("%d,%d,%d,%d\r\n",amp[0],amp[1],amp[2],amp[3]);
+                        }//
+                    }
 
                     Chassis.GlobalPos.x= px;
                     Chassis.GlobalPos.y = py;
@@ -126,14 +154,10 @@ void StartMotorCtlTask(void *argument)
                     Chassis.targetPos.yaw = tgt_yaw;
                     Chassis_Control(Chassis_Global, Chassis_Position, tgt_x, tgt_y, tgt_w, pyaw);
 
-                    float t  = Chassis.targetWheel.LB * RAD_S_TO_RPM;
-                    tt_f[0] = (int16_t)(Serial_cmd_structor.kt * 600.0f * t / (fabsf(t) + 100.0f));
-                    t  = Chassis.targetWheel.LF * RAD_S_TO_RPM;
-                    tt_f[1] = (int16_t)(Serial_cmd_structor.kt * 600.0f * t / (fabsf(t) + 100.0f));
-                    t  = Chassis.targetWheel.RF * RAD_S_TO_RPM;
-                    tt_f[2] = (int16_t)(Serial_cmd_structor.kt * 1300.0f * t / (fabsf(t) + 100.0f));
-                    t  = Chassis.targetWheel.RB * RAD_S_TO_RPM;
-                    tt_f[3] = (int16_t)(Serial_cmd_structor.kt * 1300.0f * t / (fabsf(t) + 100.0f));
+                    tt_f[0] = M3508_FeedForward(Chassis.targetWheel.LB * RAD_S_TO_RPM,ff_F0[0],ff_A[0]);
+                    tt_f[1] = M3508_FeedForward(Chassis.targetWheel.LF * RAD_S_TO_RPM,ff_F0[1],ff_A[1]);
+                    tt_f[2] = M3508_FeedForward(Chassis.targetWheel.RF * RAD_S_TO_RPM,ff_F0[2],ff_A[2]);
+                    tt_f[3] = M3508_FeedForward(Chassis.targetWheel.RB * RAD_S_TO_RPM,ff_F0[3],ff_A[3]);
 
                     amp[0] =  limit_constrain_(M3508_speed_ctl(&m3508_data[Motor1_3508],Chassis.targetWheel.LB * RAD_S_TO_RPM )+tt_f[0]);
                     amp[1] =  limit_constrain_(M3508_speed_ctl(&m3508_data[Motor2_3508],Chassis.targetWheel.LF * RAD_S_TO_RPM )+tt_f[1]);

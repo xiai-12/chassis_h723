@@ -12,6 +12,7 @@
 #include <stdint.h>
 #include <math.h>
 #include "PID/pid.h"
+#include "motion_plane.h"
 
 #define CHASSIS_S   0.0750f // 轮子半径
 #define CHASSIS_R   0.3359f // 轮子距离中心的距离
@@ -110,6 +111,7 @@ typedef struct {
 
 extern Chassis_t Chassis;
 extern PID_Structor chassis_pos_vx,chassis_pos_vy,chassis_pos_yaw;
+extern Trace Pos_x_trace,Pos_y_trace,Yaw_trace,Total_trace;
 
 void Chassis_Init(void);
 void Chassis_Control(Chassis_Frame_t frame, Chassis_Mode_t mode, float x, float y, float z, float para);

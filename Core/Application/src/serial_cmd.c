@@ -4,7 +4,7 @@
 Serial_CMD Serial_cmd_structor={
     .motor_mode = MODE_NONE,
     .debug_mode = DEBUG_TRUE,
-    .kt = 0.5f
+    .kt = 1.0f
 };
 Vision_CMD Vision_cmd_structor = {0};
 Encoder_imu_CMD Encoder_imu_cmd_structor={0};
@@ -16,7 +16,7 @@ static void Radar_Filter(float rx, float ry, float ryaw,float* val);
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // 雷达数据滤波
 Filter_MA_t x_mat,y_mat,yaw_mat;
-#define Filter_alpha   0.9f
+#define Filter_alpha   0.95f
 #define Radar_jump_max 0.04f
 static float last_rx, last_ry,last_yaw = 0.0f;
 static uint8_t radar_first = 1;              // 首帧标志
@@ -33,7 +33,6 @@ static void Radar_Filter(float rx, float ry, float ryaw,float* val)
     if (fabsf(rx - last_rx) > Radar_jump_max || fabsf(ry - last_ry) > Radar_jump_max)
     {
         val[0] = last_rx; val[1] = last_ry; val[2] = last_yaw;
-        last_rx = rx; last_ry = ry; last_yaw = ryaw;
         return;
     }
     // 低通滤波
@@ -44,9 +43,8 @@ static void Radar_Filter(float rx, float ry, float ryaw,float* val)
     else if (yaw_err < -M_PI) yaw_err += 2.0f *(float) M_PI;
     val[2] = last_yaw + Filter_alpha * yaw_err;
     // 滑动窗口滤波
-    MAF_Filter(&x_mat,rx);
-    MAF_Filter(&y_mat,rx);
-    MAF_Filter(&yaw_mat,ryaw);
+    val[0] = MAF_Filter(&x_mat,rx);
+    val[1] = MAF_Filter(&y_mat,ry);
     last_rx = rx; last_ry = ry;last_yaw = ryaw;
 }
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -224,8 +222,7 @@ void Parse_serial_line(char *cmd)
                 pid_ptr = &(m3508_data[Motor1_3508].speed_pid);
                 break;
             case MODE_2:
-                //pid_ptr = &(m3508_data[Motor1_3508].speed_pid);
-                pid_ptr = &chassis_pos_vx;
+                pid_ptr = &(m3508_data[Motor1_3508].speed_pid);
                 break;
             case MODE_3:
                 if (Serial_cmd_structor.angle == 0)
@@ -274,11 +271,12 @@ void Parse_serial_line(char *cmd)
                 case 't':
                     Serial_cmd_structor.kt = Parse_float(cmd,3);
                     SERIAL_printf("kt:%f\r\n",Serial_cmd_structor.kt);
+                    //Total_trace.acc = Serial_cmd_structor.kt;
                     break;
                 default:
                     break;
                 }
-                PID_ModifyParams(&chassis_pos_vy,Serial_cmd_structor.kp,Serial_cmd_structor.ki,Serial_cmd_structor.kd);
+                //PID_ModifyParams(&m3508_data[Motor2_3508].speed_pid,Serial_cmd_structor.kp,Serial_cmd_structor.ki,Serial_cmd_structor.kd);
             }
             // for (uint8_t i = 1; i < 4; i++)
             // {
@@ -351,7 +349,8 @@ void StartSerialTxTask(void *argument)
     {
         //SERIAL_printf("%f,%f,%f\r\n",Vision_cmd_structor.pos_x,Vision_cmd_structor.pos_y,Vision_cmd_structor.yaw);
         SERIAL_printf("%f,%f,%f\r\n",Vision_cmd_structor.pos_x-LOCATER_LIDAR_OFFSET_X_CM,Vision_cmd_structor.pos_y+LOCATER_LIDAR_OFFSET_Y_CM,Vision_cmd_structor.yaw);
-
+        //SERIAL_printf("%f,%f,%f,%f,%f\r\n",Pos_x_trace.pos_target,Pos_y_trace.pos_target,Chassis.targetPos.yaw,m3508_data[Motor1_3508].speed_pid.Tar,m3508_data[Motor2_3508].speed_pid.Tar);
+        //SERIAL_printf("%f,%f,%f\r\n",m3508_data[Motor1_3508].speed_pid.Tar,m3508_data[Motor1_3508].speed_pid.Act,m3508_data[Motor1_3508].speed_pid.Out);
         osDelay(50);
     }
     /* USER CODE END StartSerialTXTask */

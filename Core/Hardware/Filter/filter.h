@@ -7,7 +7,7 @@
 #include "main.h"
 
 
-#define NUM_SAMPLES 6
+#define NUM_SAMPLES 4
 
 // 低通滤波
 typedef struct {
