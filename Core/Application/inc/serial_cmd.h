@@ -15,6 +15,7 @@
 #include "Vision/connect.h"
 #include "WS2812/ws2812.h"
 
+#include "motor_control.h"
 
 // 电机运动模式选择
 typedef  enum MOTOR_MODE

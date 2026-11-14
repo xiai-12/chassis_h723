@@ -6,6 +6,12 @@ int16_t amp_zero[4] = {0};
 int16_t amp[4] = {0};
 int16_t tt_f[4]; // 前馈反馈值
 
+PID_Structor pos_low;
+PID_Improve pos_low_im = {
+    .deriv_filter = 1 , .deriv_filter_alpha = 0.8f,
+    .deriv_on_meas = 1 ,
+    .integral_limit = 1 , .integral_limit_val = 1000.0f
+};
 
 static int16_t limit_constrain_(int32_t amp)
 {
@@ -19,8 +25,8 @@ static float wrap_pi(float a)
     return a;
 }
 
-static const float ff_A [4] = { 600.0f, 600.0f, 1300.0f, 1300.0f}; // 粘性摩擦
-static const float ff_F0[4] = { 450.0f, 450.0f,  450.0f,  450.0f}; // 库伦摩擦
+static  float ff_A [4] = { 600.0f, 600.0f, 1300.0f, 1300.0f}; // 粘性摩擦
+static  float ff_F0[4] = { 2800.0f, 2800.0f,  2800.0f,  2800.0f}; // 库伦摩擦
 static int16_t M3508_FeedForward(float t_rpm, float F0, float A)
 {
     float s = t_rpm / 6.0f;
@@ -44,6 +50,8 @@ void StartMotorCtlTask(void *argument)
 
     M3508_Init();
     Chassis_Init();
+
+    PID_Init(&pos_low,0.0f,0.0f,0.0f,2.0f,-2.0f,&pos_low_im);
 
     static float vx,vy,w;
     static float vx3,vy3,w3;
@@ -83,11 +91,23 @@ void StartMotorCtlTask(void *argument)
                     w = 0.80f * w_1 + 0.20f * w;
                     Chassis_Control(Chassis_Body,Chassis_Speed,vx,vy,w,0);
 
-                    amp[0] =  limit_constrain_(M3508_speed_ctl(&m3508_data[Motor1_3508],Chassis.targetWheel.LB * RAD_S_TO_RPM));
-                    amp[1] =  limit_constrain_(M3508_speed_ctl(&m3508_data[Motor2_3508],Chassis.targetWheel.LF * RAD_S_TO_RPM));
-                    amp[2] =  limit_constrain_(M3508_speed_ctl(&m3508_data[Motor3_3508],Chassis.targetWheel.RF * RAD_S_TO_RPM));
-                    amp[3] =  limit_constrain_(M3508_speed_ctl(&m3508_data[Motor4_3508],Chassis.targetWheel.RB * RAD_S_TO_RPM));
-                    M3508_SendData(&m3508_tx_header,amp);
+                for (uint8_t i=0;i<4;i++)
+                {
+                    ff_F0[i] = Serial_cmd_structor.speed_tar*10.0f;
+                }
+
+                tt_f[0] = M3508_FeedForward(Chassis.targetWheel.LB * RAD_S_TO_RPM,ff_F0[0],ff_A[0]);
+                tt_f[1] = M3508_FeedForward(Chassis.targetWheel.LF * RAD_S_TO_RPM,ff_F0[1],ff_A[1]);
+                tt_f[2] = M3508_FeedForward(Chassis.targetWheel.RF * RAD_S_TO_RPM,ff_F0[2],ff_A[2]);
+                tt_f[3] = M3508_FeedForward(Chassis.targetWheel.RB * RAD_S_TO_RPM,ff_F0[3],ff_A[3]);
+
+                amp[0] =  limit_constrain_(M3508_speed_ctl(&m3508_data[Motor1_3508],Chassis.targetWheel.LB * RAD_S_TO_RPM )+tt_f[0]);
+                amp[1] =  limit_constrain_(M3508_speed_ctl(&m3508_data[Motor2_3508],Chassis.targetWheel.LF * RAD_S_TO_RPM )+tt_f[1]);
+                amp[2] =  limit_constrain_(M3508_speed_ctl(&m3508_data[Motor3_3508],Chassis.targetWheel.RF * RAD_S_TO_RPM )+tt_f[2]);
+                amp[3] =  limit_constrain_(M3508_speed_ctl(&m3508_data[Motor4_3508],Chassis.targetWheel.RB * RAD_S_TO_RPM )+tt_f[3]);
+
+
+                M3508_SendData(&m3508_tx_header,amp);
 
                     break;
                 case MODE_2:
@@ -136,7 +156,7 @@ void StartMotorCtlTask(void *argument)
                             float off_y = LOCATER_LIDAR_OFFSET_X_CM * sinf(pyaw) + LOCATER_LIDAR_OFFSET_Y_CM * cosf(pyaw);
                             px  += 0.8f * ((-Vision_cmd_structor.pos_y - off_x ) - px);
                             py  += 0.8f * (( Vision_cmd_structor.pos_x - off_y ) - py);
-                            pyaw  = wrap_pi(pyaw + 0.3f * wrap_pi(Vision_cmd_structor.yaw - LOCATER_LIDAR_YAW_OFFSET - pyaw));
+                            pyaw  = wrap_pi(pyaw + 0.8f * wrap_pi(Vision_cmd_structor.yaw - LOCATER_LIDAR_YAW_OFFSET - pyaw));
                             //SERIAL_printf("%.3f,%.3f,%.3f,%.3f,%.3f\r\n",tgt_x, tgt_y,Chassis.targetVel.v_x,Chassis.targetVel.v_y,Chassis.targetVel.w);
                             //SERIAL_printf("%d,%d,%d,%d\r\n",amp[0],amp[1],amp[2],amp[3]);
                         }//
@@ -154,18 +174,27 @@ void StartMotorCtlTask(void *argument)
                     Chassis.targetPos.yaw = tgt_yaw;
                     Chassis_Control(Chassis_Global, Chassis_Position, tgt_x, tgt_y, tgt_w, pyaw);
 
-                    tt_f[0] = M3508_FeedForward(Chassis.targetWheel.LB * RAD_S_TO_RPM,ff_F0[0],ff_A[0]);
-                    tt_f[1] = M3508_FeedForward(Chassis.targetWheel.LF * RAD_S_TO_RPM,ff_F0[1],ff_A[1]);
-                    tt_f[2] = M3508_FeedForward(Chassis.targetWheel.RF * RAD_S_TO_RPM,ff_F0[2],ff_A[2]);
-                    tt_f[3] = M3508_FeedForward(Chassis.targetWheel.RB * RAD_S_TO_RPM,ff_F0[3],ff_A[3]);
 
-                    amp[0] =  limit_constrain_(M3508_speed_ctl(&m3508_data[Motor1_3508],Chassis.targetWheel.LB * RAD_S_TO_RPM )+tt_f[0]);
-                    amp[1] =  limit_constrain_(M3508_speed_ctl(&m3508_data[Motor2_3508],Chassis.targetWheel.LF * RAD_S_TO_RPM )+tt_f[1]);
-                    amp[2] =  limit_constrain_(M3508_speed_ctl(&m3508_data[Motor3_3508],Chassis.targetWheel.RF * RAD_S_TO_RPM )+tt_f[2]);
-                    amp[3] =  limit_constrain_(M3508_speed_ctl(&m3508_data[Motor4_3508],Chassis.targetWheel.RB * RAD_S_TO_RPM )+tt_f[3]);
+                    for (uint8_t i=0;i<4;i++)
+                    {
+                        ff_F0[i] = Serial_cmd_structor.speed_tar;
+                    }
 
+                    // tt_f[0] = M3508_FeedForward(Chassis.targetWheel.LB * RAD_S_TO_RPM,ff_F0[0],ff_A[0]);
+                    // tt_f[1] = M3508_FeedForward(Chassis.targetWheel.LF * RAD_S_TO_RPM,ff_F0[1],ff_A[1]);
+                    // tt_f[2] = M3508_FeedForward(Chassis.targetWheel.RF * RAD_S_TO_RPM,ff_F0[2],ff_A[2]);
+                    // tt_f[3] = M3508_FeedForward(Chassis.targetWheel.RB * RAD_S_TO_RPM,ff_F0[3],ff_A[3]);
+
+                    // amp[0] =  limit_constrain_(M3508_speed_ctl(&m3508_data[Motor1_3508],Chassis.targetWheel.LB * RAD_S_TO_RPM )+tt_f[0]);
+                    // amp[1] =  limit_constrain_(M3508_speed_ctl(&m3508_data[Motor2_3508],Chassis.targetWheel.LF * RAD_S_TO_RPM )+tt_f[1]);
+                    // amp[2] =  limit_constrain_(M3508_speed_ctl(&m3508_data[Motor3_3508],Chassis.targetWheel.RF * RAD_S_TO_RPM )+tt_f[2]);
+                    // amp[3] =  limit_constrain_(M3508_speed_ctl(&m3508_data[Motor4_3508],Chassis.targetWheel.RB * RAD_S_TO_RPM )+tt_f[3]);
+
+                    amp[0] = M3508_speed_ctl(&m3508_data[Motor1_3508],Chassis.targetWheel.LB * RAD_S_TO_RPM );
+                    amp[1] = M3508_speed_ctl(&m3508_data[Motor2_3508],Chassis.targetWheel.LF * RAD_S_TO_RPM );
+                    amp[2] = M3508_speed_ctl(&m3508_data[Motor3_3508],Chassis.targetWheel.RF * RAD_S_TO_RPM );
+                    amp[3] = M3508_speed_ctl(&m3508_data[Motor4_3508],Chassis.targetWheel.RB * RAD_S_TO_RPM );
                     M3508_SendData(&m3508_tx_header,amp);
-
                     break;
                 }
 
@@ -187,11 +216,22 @@ void StartMotorCtlTask(void *argument)
                     t  = Chassis.targetWheel.RB * RAD_S_TO_RPM;
                     tt_f[3] = (int16_t)(Serial_cmd_structor.kt * 1300.0f * t / (fabsf(t) + 100.0f));
 
-                    amp[0] =  limit_constrain_(M3508_speed_ctl(&m3508_data[Motor1_3508],Chassis.targetWheel.LB * RAD_S_TO_RPM )+tt_f[0]);
-                    amp[1] =  limit_constrain_(M3508_speed_ctl(&m3508_data[Motor2_3508],Chassis.targetWheel.LF * RAD_S_TO_RPM )+tt_f[1]);
-                    amp[2] =  limit_constrain_(M3508_speed_ctl(&m3508_data[Motor3_3508],Chassis.targetWheel.RF * RAD_S_TO_RPM )+tt_f[2]);
-                    amp[3] =  limit_constrain_(M3508_speed_ctl(&m3508_data[Motor4_3508],Chassis.targetWheel.RB * RAD_S_TO_RPM )+tt_f[3]);
-                    M3508_SendData(&m3508_tx_header,amp);
+                for (uint8_t i=0;i<4;i++)
+                {
+                    ff_F0[i] = Serial_cmd_structor.speed_tar*10.0f;
+                }
+
+                tt_f[0] = M3508_FeedForward(Chassis.targetWheel.LB * RAD_S_TO_RPM,ff_F0[0],ff_A[0]);
+                tt_f[1] = M3508_FeedForward(Chassis.targetWheel.LF * RAD_S_TO_RPM,ff_F0[1],ff_A[1]);
+                tt_f[2] = M3508_FeedForward(Chassis.targetWheel.RF * RAD_S_TO_RPM,ff_F0[2],ff_A[2]);
+                tt_f[3] = M3508_FeedForward(Chassis.targetWheel.RB * RAD_S_TO_RPM,ff_F0[3],ff_A[3]);
+
+                amp[0] =  limit_constrain_(M3508_speed_ctl(&m3508_data[Motor1_3508],Chassis.targetWheel.LB * RAD_S_TO_RPM )+tt_f[0]);
+                amp[1] =  limit_constrain_(M3508_speed_ctl(&m3508_data[Motor2_3508],Chassis.targetWheel.LF * RAD_S_TO_RPM )+tt_f[1]);
+                amp[2] =  limit_constrain_(M3508_speed_ctl(&m3508_data[Motor3_3508],Chassis.targetWheel.RF * RAD_S_TO_RPM )+tt_f[2]);
+                amp[3] =  limit_constrain_(M3508_speed_ctl(&m3508_data[Motor4_3508],Chassis.targetWheel.RB * RAD_S_TO_RPM )+tt_f[3]);
+
+                M3508_SendData(&m3508_tx_header,amp);
 
                     break;
                 default:

@@ -18,6 +18,8 @@
 #include "Vision/connect.h"
 #include "WS2812/ws2812.h"
 
+extern PID_Structor pos_low;
+
 void Motor_Reset(void);
 
 #endif //ROBOCON_TEST_MOTOR_CONTROL_H
