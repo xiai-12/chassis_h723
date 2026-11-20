@@ -46,17 +46,16 @@ void StartMotorCtlTask(void *argument)
     const TickType_t xPeriod = pdMS_TO_TICKS(5);
 
     WS2812_Init();
-    WS2812_SetLED(0,100,20,200);
+    WS2812_SetLED(0,10,80,20);
 
     M3508_Init();
     Chassis_Init();
 
     PID_Init(&pos_low,0.0f,0.0f,0.0f,2.0f,-2.0f,&pos_low_im);
 
-    static float vx,vy,w;
-    static float vx3,vy3,w3;
     static uint8_t stop_flag = 0;
     static uint16_t btn_last = 0;
+    Chassis_WheelType_t m3508_pos_act;
     /* Infinite loop */
     for(;;)
     {
@@ -79,35 +78,29 @@ void StartMotorCtlTask(void *argument)
                 case MODE_NONE:
                     break;
                 case MODE_1:
-                    /* 遥控器在线就用遥控器；掉线退回串口，方便台上调试 */
-                    //float vx_1 = (nrf_chassis_cmd.link != 0) ? nrf_chassis_cmd.vx : Serial_cmd_structor.vx;
-                    float vx_1 = Vision_cmd_structor.vx;
-                    vx = 0.80f * vx_1 + 0.20f * vx;
-                    //float vy_1 = (nrf_chassis_cmd.link != 0) ? nrf_chassis_cmd.vy : Serial_cmd_structor.vy;
-                    float vy_1 = Vision_cmd_structor.vy;
-                    vy = 0.80f * vy_1 + 0.20f * vy;
-                    //float w_1 = (nrf_chassis_cmd.link != 0) ? nrf_chassis_cmd.w : Serial_cmd_structor.w;
-                    float w_1 = Vision_cmd_structor.w;
-                    w = 0.80f * w_1 + 0.20f * w;
-                    Chassis_Control(Chassis_Body,Chassis_Speed,vx,vy,w,0);
+                    // 编码器正解算
+                    // turns -> rad   *2*M_PI/Reduce_ration = 0.3272f
+                    m3508_pos_act.LB = m3508_data[Motor1_3508].turns * 0.3272f;
+                    m3508_pos_act.LF = m3508_data[Motor2_3508].turns * 0.3272f;
+                    m3508_pos_act.RF = m3508_data[Motor3_3508].turns * 0.3272f;
+                    m3508_pos_act.RB = m3508_data[Motor4_3508].turns * 0.3272f;
+                    Chassis_Velocity_t chassis_position = Chassis_FK_Wheel2Body(&m3508_pos_act);// 正解算得到的值单位是 m
 
-                for (uint8_t i=0;i<4;i++)
-                {
-                    ff_F0[i] = Serial_cmd_structor.speed_tar*10.0f;
-                }
+                    Chassis.GlobalPos.x= chassis_position.v_x;
+                    Chassis.GlobalPos.y = chassis_position.v_y;
+                    Chassis.GlobalPos.yaw = chassis_position.w;
 
-                tt_f[0] = M3508_FeedForward(Chassis.targetWheel.LB * RAD_S_TO_RPM,ff_F0[0],ff_A[0]);
-                tt_f[1] = M3508_FeedForward(Chassis.targetWheel.LF * RAD_S_TO_RPM,ff_F0[1],ff_A[1]);
-                tt_f[2] = M3508_FeedForward(Chassis.targetWheel.RF * RAD_S_TO_RPM,ff_F0[2],ff_A[2]);
-                tt_f[3] = M3508_FeedForward(Chassis.targetWheel.RB * RAD_S_TO_RPM,ff_F0[3],ff_A[3]);
+                    float pos_x   = Serial_cmd_structor.x;
+                    float pos_y   = Serial_cmd_structor.y;
+                    float pos_w = Serial_cmd_structor.w;
 
-                amp[0] =  limit_constrain_(M3508_speed_ctl(&m3508_data[Motor1_3508],Chassis.targetWheel.LB * RAD_S_TO_RPM )+tt_f[0]);
-                amp[1] =  limit_constrain_(M3508_speed_ctl(&m3508_data[Motor2_3508],Chassis.targetWheel.LF * RAD_S_TO_RPM )+tt_f[1]);
-                amp[2] =  limit_constrain_(M3508_speed_ctl(&m3508_data[Motor3_3508],Chassis.targetWheel.RF * RAD_S_TO_RPM )+tt_f[2]);
-                amp[3] =  limit_constrain_(M3508_speed_ctl(&m3508_data[Motor4_3508],Chassis.targetWheel.RB * RAD_S_TO_RPM )+tt_f[3]);
+                    Chassis_Control(Chassis_Global, Chassis_Position, pos_x, pos_y, pos_w, 0.0f);
 
-
-                M3508_SendData(&m3508_tx_header,amp);
+                    amp[0] =  limit_constrain_(M3508_speed_ctl(&m3508_data[Motor1_3508],Chassis.targetWheel.LB * RAD_S_TO_RPM )+tt_f[0]);
+                    amp[1] =  limit_constrain_(M3508_speed_ctl(&m3508_data[Motor2_3508],Chassis.targetWheel.LF * RAD_S_TO_RPM )+tt_f[1]);
+                    amp[2] =  limit_constrain_(M3508_speed_ctl(&m3508_data[Motor3_3508],Chassis.targetWheel.RF * RAD_S_TO_RPM )+tt_f[2]);
+                    amp[3] =  limit_constrain_(M3508_speed_ctl(&m3508_data[Motor4_3508],Chassis.targetWheel.RB * RAD_S_TO_RPM )+tt_f[3]);
+                    M3508_SendData(&m3508_tx_header,amp);
 
                     break;
                 case MODE_2:
@@ -200,38 +193,15 @@ void StartMotorCtlTask(void *argument)
 
                 case MODE_3:
                     float vx_3 = (nrf_chassis_cmd.link != 0) ? nrf_chassis_cmd.vx : Serial_cmd_structor.x;
-                    vx3 = 0.80f * vx_3 + 0.20f * vx3;
                     float vy_3 = (nrf_chassis_cmd.link != 0) ? nrf_chassis_cmd.vy : Serial_cmd_structor.y;
-                    vy3 = 0.80f * vy_3 + 0.20f * vy3;
-                    float w_3 = (nrf_chassis_cmd.link != 0) ? nrf_chassis_cmd.w : Serial_cmd_structor.w;
-                    w3 = 0.80f * w_3 + 0.20f * w3;
-                    Chassis_Control(Chassis_Body,Chassis_Speed,vx3,vy3,w3,0);
-                    //阻力前馈
-                    float t  = Chassis.targetWheel.LB * RAD_S_TO_RPM;
-                    tt_f[0] = (int16_t)(Serial_cmd_structor.kt * 600.0f * t / (fabsf(t) + 100.0f));
-                    t  = Chassis.targetWheel.LF * RAD_S_TO_RPM;
-                    tt_f[1] = (int16_t)(Serial_cmd_structor.kt * 600.0f * t / (fabsf(t) + 100.0f));
-                    t  = Chassis.targetWheel.RF * RAD_S_TO_RPM;
-                    tt_f[2] = (int16_t)(Serial_cmd_structor.kt * 1300.0f * t / (fabsf(t) + 100.0f));
-                    t  = Chassis.targetWheel.RB * RAD_S_TO_RPM;
-                    tt_f[3] = (int16_t)(Serial_cmd_structor.kt * 1300.0f * t / (fabsf(t) + 100.0f));
-
-                for (uint8_t i=0;i<4;i++)
-                {
-                    ff_F0[i] = Serial_cmd_structor.speed_tar*10.0f;
-                }
-
-                tt_f[0] = M3508_FeedForward(Chassis.targetWheel.LB * RAD_S_TO_RPM,ff_F0[0],ff_A[0]);
-                tt_f[1] = M3508_FeedForward(Chassis.targetWheel.LF * RAD_S_TO_RPM,ff_F0[1],ff_A[1]);
-                tt_f[2] = M3508_FeedForward(Chassis.targetWheel.RF * RAD_S_TO_RPM,ff_F0[2],ff_A[2]);
-                tt_f[3] = M3508_FeedForward(Chassis.targetWheel.RB * RAD_S_TO_RPM,ff_F0[3],ff_A[3]);
-
-                amp[0] =  limit_constrain_(M3508_speed_ctl(&m3508_data[Motor1_3508],Chassis.targetWheel.LB * RAD_S_TO_RPM )+tt_f[0]);
-                amp[1] =  limit_constrain_(M3508_speed_ctl(&m3508_data[Motor2_3508],Chassis.targetWheel.LF * RAD_S_TO_RPM )+tt_f[1]);
-                amp[2] =  limit_constrain_(M3508_speed_ctl(&m3508_data[Motor3_3508],Chassis.targetWheel.RF * RAD_S_TO_RPM )+tt_f[2]);
-                amp[3] =  limit_constrain_(M3508_speed_ctl(&m3508_data[Motor4_3508],Chassis.targetWheel.RB * RAD_S_TO_RPM )+tt_f[3]);
-
-                M3508_SendData(&m3508_tx_header,amp);
+                    float w_3  = (nrf_chassis_cmd.link != 0) ? nrf_chassis_cmd.w : Serial_cmd_structor.w;
+                    Chassis_Control(Chassis_Body,Chassis_Speed,vx_3,vy_3,w_3,0);
+                    //
+                    amp[0] =  M3508_speed_ctl(&m3508_data[Motor1_3508],Chassis.targetWheel.LB * RAD_S_TO_RPM);
+                    amp[1] =  M3508_speed_ctl(&m3508_data[Motor2_3508],Chassis.targetWheel.RB * RAD_S_TO_RPM);
+                    amp[2] =  M3508_speed_ctl(&m3508_data[Motor3_3508],Chassis.targetWheel.RF * RAD_S_TO_RPM);
+                    amp[3] =  M3508_speed_ctl(&m3508_data[Motor4_3508],Chassis.targetWheel.LF * RAD_S_TO_RPM);
+                     M3508_SendData(&m3508_tx_header,amp);
 
                     break;
                 default:
@@ -240,7 +210,6 @@ void StartMotorCtlTask(void *argument)
         }
         else
         {
-            vx = vy = w = 0;
             Chassis.targetVel.v_x = Chassis.targetVel.v_y = Chassis.targetVel.w = 0.0f;
             M3508_SendData(&m3508_tx_header,amp_zero);
         }

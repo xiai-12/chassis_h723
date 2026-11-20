@@ -17,7 +17,7 @@
 #include "serial_cmd.h"
 
 #define CHASSIS_S   0.0750f // 轮子半径
-#define CHASSIS_R   0.3359f // 轮子距离中心的距离
+#define CHASSIS_R   0.282f // 轮子距离中心的距离
 
 #define LOCATER_LIDAR_OFFSET_X_CM         (-0.165f)   // 雷达在底盘中心 -X 方向
 #define LOCATER_LIDAR_OFFSET_Y_CM         (-0.195f)   // 雷达在底盘中心 -Y 方向

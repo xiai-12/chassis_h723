@@ -84,10 +84,10 @@ HAL_StatusTypeDef M3508_Init(void)
         return HAL_ERROR;
     }
 
-    PID_Init(&m3508_data[0].speed_pid,20.0f,0.25f,2.0f,15000,-15000,&speed_im);
-    PID_Init(&m3508_data[1].speed_pid,20.0f,0.20f,2.0f,15000,-15000,&speed_im);
-    PID_Init(&m3508_data[2].speed_pid,20.0f,0.30f,2.0f,15000,-15000,&speed_im);
-    PID_Init(&m3508_data[3].speed_pid,20.0f,0.20f,2.0f,15000,-15000,&speed_im);
+    PID_Init(&m3508_data[0].speed_pid,24.0f,0.25f,2.0f,15000,-15000,&speed_im);
+    PID_Init(&m3508_data[1].speed_pid,24.0f,0.20f,2.0f,15000,-15000,&speed_im);
+    PID_Init(&m3508_data[2].speed_pid,24.0f,0.30f,2.0f,15000,-15000,&speed_im);
+    PID_Init(&m3508_data[3].speed_pid,24.0f,0.20f,2.0f,15000,-15000,&speed_im);
     return HAL_OK;
 }
 
