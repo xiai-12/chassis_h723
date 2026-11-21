@@ -214,6 +214,30 @@ void StartMotorCtlTask(void *argument)
                     }
 
                     break;
+                case MODE_4:
+                // id 6 8 正值  5 7 负值4
+                    if (Serial_cmd_structor.angle == 0)
+                    {
+                        amp[0] =  M3508_speed_ctl(&m3508_data[Motor1_3508],Serial_cmd_structor.speed_tar);
+                        amp[1] = amp[2] =amp[3] =0;
+                    }
+                    else if (Serial_cmd_structor.angle == 90)
+                    {
+                        amp[1] =  M3508_speed_ctl(&m3508_data[Motor2_3508],Serial_cmd_structor.speed_tar);
+                        amp[0] = amp[2] =amp[3] =0;
+                    }
+                    else if (Serial_cmd_structor.angle == 180)
+                    {
+                        amp[2] =  M3508_speed_ctl(&m3508_data[Motor3_3508],Serial_cmd_structor.speed_tar);
+                        amp[1] = amp[0] =amp[3] =0;
+                    }
+                    else if (Serial_cmd_structor.angle == 270)
+                    {
+                        amp[3] =  M3508_speed_ctl(&m3508_data[Motor4_3508],Serial_cmd_structor.speed_tar);
+                        amp[1] = amp[2] =amp[0] =0;
+                    }
+                    M3508_SendData(&m3508_tx_header,amp);
+                    break;
                 default:
                     break;
             }
@@ -251,16 +275,16 @@ void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo0ITs)
         switch (hdr.Identifier)
         {
         // dji-m3508
-        case 0x201:
+        case 0x205:
             m3508_motor_callback(&hdr,&m3508_data[Motor1_3508],d);
             break;
-        case 0x202:
+        case 0x206:
             m3508_motor_callback(&hdr,&m3508_data[Motor2_3508],d);
             break;
-        case 0x203:
+        case 0x207:
             m3508_motor_callback(&hdr,&m3508_data[Motor3_3508],d);
             break;
-        case 0x204:
+        case 0x208:
             m3508_motor_callback(&hdr,&m3508_data[Motor4_3508],d);
             break;
 

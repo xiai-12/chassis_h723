@@ -54,7 +54,7 @@ HAL_StatusTypeDef M3508_Init(void)
     m3508_tx_header.DataLength = FDCAN_DLC_BYTES_8;
     m3508_tx_header.ErrorStateIndicator = FDCAN_ESI_ACTIVE;
     m3508_tx_header.FDFormat = FDCAN_CLASSIC_CAN;
-    m3508_tx_header.Identifier = 0x200;
+    m3508_tx_header.Identifier = 0x1FF;
     m3508_tx_header.MessageMarker = 0x01;
     m3508_tx_header.TxEventFifoControl = FDCAN_NO_TX_EVENTS;
     m3508_tx_header.TxFrameType= FDCAN_DATA_FRAME;
@@ -127,7 +127,7 @@ HAL_StatusTypeDef M3508_SendData(const FDCAN_TxHeaderTypeDef* can_tx_header,int1
 
 // m3508电机回调函数
 void  m3508_motor_callback(FDCAN_RxHeaderTypeDef* hdr,M3508_t* motor,uint8_t* hdr_data)
-{
+{///////////////00
     motor->rx_header = *hdr;
     motor->rx_data_ptr = hdr_data;
     motor->angle = (uint16_t)((hdr_data[0] << 8) | hdr_data[1]);

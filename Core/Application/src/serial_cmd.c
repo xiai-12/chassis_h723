@@ -372,6 +372,12 @@ void StartSerialTxTask(void *argument)
                 SERIAL_printf("%f,%f,%f,%d,%d,%f,%f,%f\r\n",nrf_chassis_cmd.vx,nrf_chassis_cmd.vy,nrf_chassis_cmd.w,nrf_chassis_cmd.keys,
                     nrf_chassis_cmd.link,Chassis.targetVel.v_x,Chassis.targetVel.v_y,Chassis.targetVel.w);
             break;
+            case MODE_4:
+                SERIAL_printf("%f,%f,%f,%f,%f,%f,%f,%f\r\n",m3508_data[Motor1_3508].speed_pid.Tar,m3508_data[Motor1_3508].speed_pid.Act,
+                    m3508_data[Motor2_3508].speed_pid.Tar,m3508_data[Motor2_3508].speed_pid.Act,
+                    m3508_data[Motor3_3508].speed_pid.Tar,m3508_data[Motor3_3508].speed_pid.Act,
+                    m3508_data[Motor4_3508].speed_pid.Tar,m3508_data[Motor4_3508].speed_pid.Act);
+                break;
             default:
             break;
         }

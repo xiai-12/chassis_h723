@@ -24,6 +24,7 @@ typedef  enum MOTOR_MODE
     MODE_1 =1, // 定速
     MODE_2 =2, // 定位置
     MODE_3 =3, // 串级定位置
+    MODE_4 =4
 }MOTOR_MODE;
 
 // 是否开启调试模式
