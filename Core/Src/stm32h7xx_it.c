@@ -56,7 +56,7 @@
 
 /* External variables --------------------------------------------------------*/
 extern FDCAN_HandleTypeDef hfdcan1;
-extern SPI_HandleTypeDef hspi3;
+extern SPI_HandleTypeDef hspi1;
 extern DMA_HandleTypeDef hdma_tim3_ch2;
 extern DMA_HandleTypeDef hdma_uart7_rx;
 extern DMA_HandleTypeDef hdma_usart1_rx;
@@ -240,6 +240,20 @@ void FDCAN1_IT0_IRQHandler(void)
 }
 
 /**
+  * @brief This function handles SPI1 global interrupt.
+  */
+void SPI1_IRQHandler(void)
+{
+  /* USER CODE BEGIN SPI1_IRQn 0 */
+
+  /* USER CODE END SPI1_IRQn 0 */
+  HAL_SPI_IRQHandler(&hspi1);
+  /* USER CODE BEGIN SPI1_IRQn 1 */
+
+  /* USER CODE END SPI1_IRQn 1 */
+}
+
+/**
   * @brief This function handles USART1 global interrupt.
   */
 void USART1_IRQHandler(void)
@@ -265,20 +279,6 @@ void USART2_IRQHandler(void)
   /* USER CODE BEGIN USART2_IRQn 1 */
 
   /* USER CODE END USART2_IRQn 1 */
-}
-
-/**
-  * @brief This function handles SPI3 global interrupt.
-  */
-void SPI3_IRQHandler(void)
-{
-  /* USER CODE BEGIN SPI3_IRQn 0 */
-
-  /* USER CODE END SPI3_IRQn 0 */
-  HAL_SPI_IRQHandler(&hspi3);
-  /* USER CODE BEGIN SPI3_IRQn 1 */
-
-  /* USER CODE END SPI3_IRQn 1 */
 }
 
 /**

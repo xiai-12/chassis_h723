@@ -9,6 +9,8 @@
 #include "main.h"
 #include "spi.h"
 
+#include "Usart/Serial.h"
+
 #define NRF_CMD_W_REG      0x20U
 #define NRF_CMD_R_RX       0x61U
 #define NRF_CMD_W_ACK      0xA8U
@@ -32,7 +34,7 @@
 #define NRF_STATUS_TX_DS   0x20U
 #define NRF_STATUS_RX_DR   0x40U
 #define NRF_FEATURE_ACKPAY 0x02U
-#define NRF_IRQ_PIN        GPIO_PIN_14
+#define NRF_IRQ_PIN        GPIO_PIN_10
 
 extern osSemaphoreId_t NrfIrqSemHandle;
 
@@ -54,7 +56,7 @@ static uint8_t Nrf_Xfer(uint8_t tx)
 {
   uint8_t rx = 0xFFU;
 
-  if (HAL_SPI_TransmitReceive(&hspi3, &tx, &rx, 1U, 10U) != HAL_OK)
+  if (HAL_SPI_TransmitReceive(&hspi1, &tx, &rx, 1U, 10U) != HAL_OK)
   {
     return 0xFFU;
   }

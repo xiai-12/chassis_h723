@@ -57,16 +57,20 @@ void Error_Handler(void);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
-#define NRF_IRQ_Pin GPIO_PIN_14
-#define NRF_IRQ_GPIO_Port GPIOE
+#define NRF_CE_Pin GPIO_PIN_5
+#define NRF_CE_GPIO_Port GPIOA
+#define IO2_Pin GPIO_PIN_9
+#define IO2_GPIO_Port GPIOE
+#define IO1_Pin GPIO_PIN_13
+#define IO1_GPIO_Port GPIOE
+#define NRF_CSN_Pin GPIO_PIN_15
+#define NRF_CSN_GPIO_Port GPIOE
 #define BUZZER_Pin GPIO_PIN_15
 #define BUZZER_GPIO_Port GPIOB
+#define NRF_IRQ_Pin GPIO_PIN_10
+#define NRF_IRQ_GPIO_Port GPIOD
 #define BUTTON_Pin GPIO_PIN_15
 #define BUTTON_GPIO_Port GPIOA
-#define NRF_CE_Pin GPIO_PIN_0
-#define NRF_CE_GPIO_Port GPIOE
-#define NRF_CSN_Pin GPIO_PIN_1
-#define NRF_CSN_GPIO_Port GPIOE
 
 /* USER CODE BEGIN Private defines */
 

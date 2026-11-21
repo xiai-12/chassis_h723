@@ -56,6 +56,9 @@ void StartMotorCtlTask(void *argument)
     static uint8_t stop_flag = 0;
     static uint16_t btn_last = 0;
     Chassis_WheelType_t m3508_pos_act;
+
+    HAL_GPIO_WritePin(IO1_GPIO_Port,IO1_Pin,GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(IO2_GPIO_Port,IO2_Pin,GPIO_PIN_RESET);
     /* Infinite loop */
     for(;;)
     {
@@ -71,7 +74,8 @@ void StartMotorCtlTask(void *argument)
 
 
         // 按键或者串口开启二选一
-        if ((Serial_cmd_structor.debug_mode == DEBUG_FALSE || nrf_chassis_cmd.keys == 4) && !stop_flag)
+        //if ((Serial_cmd_structor.debug_mode == DEBUG_FALSE || nrf_chassis_cmd.keys == 4) && !stop_flag)
+        if (Serial_cmd_structor.debug_mode == DEBUG_FALSE)
         {
             switch (Serial_cmd_structor.motor_mode)
             {
@@ -202,6 +206,12 @@ void StartMotorCtlTask(void *argument)
                     amp[2] =  M3508_speed_ctl(&m3508_data[Motor3_3508],Chassis.targetWheel.RF * RAD_S_TO_RPM);
                     amp[3] =  M3508_speed_ctl(&m3508_data[Motor4_3508],Chassis.targetWheel.LF * RAD_S_TO_RPM);
                      M3508_SendData(&m3508_tx_header,amp);
+
+                    if (Is_Key_Clicked())
+                    {
+                        HAL_GPIO_TogglePin(IO1_GPIO_Port,IO1_Pin);
+                        HAL_GPIO_TogglePin(IO2_GPIO_Port,IO2_Pin);
+                    }
 
                     break;
                 default:
